@@ -13,8 +13,8 @@ import android.content.CursorLoader;
 import android.content.Loader;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -39,28 +39,20 @@ public class PackageListFragment extends ListFragment implements
 	private ListView mListView;
 	private ActivityManager mActivityManager;
 	private ContentResolver mContentResolver;
+	private LoaderManager mLoaderManager;
+	private CheckBox checkBox;
 
 	@Override
 	public void onActivityCreated(Bundle savedInstanceState) {
 		super.onActivityCreated(savedInstanceState);
-		setListShown(false);
 		mContext = getActivity();
 		mListView = (ListView) getListView();
 		mActivityManager = (ActivityManager) mContext
 				.getSystemService(Context.ACTIVITY_SERVICE);
 		mContentResolver = mContext.getContentResolver();
+		mLoaderManager = getLoaderManager();
 		mSearchView = (SearchView) getActivity().findViewById(
 				R.id.hwa_package_list_search_view);
-		mListView.setTextFilterEnabled(true);
-		mListView.setOnItemClickListener(this);
-		mSearchView.setOnQueryTextListener(this);
-		mSearchView.setSubmitButtonEnabled(false);
-		new ScanForPackages().execute();
-	}
-
-	@Override
-	public void onCreate(Bundle savedInstanceState) {
-		super.onCreate(savedInstanceState);
 		String[] from = new String[] { PackageListProvider.APPLICATION_LABEL,
 				PackageListProvider.PACKAGE_NAME,
 				PackageListProvider.HWA_DISABLED, PackageListProvider._ID };
@@ -70,32 +62,44 @@ public class PackageListFragment extends ListFragment implements
 				R.layout.hwa_settings_row, null, from, to,
 				SimpleCursorAdapter.FLAG_REGISTER_CONTENT_OBSERVER);
 		setListAdapter(adapter);
+		mListView.setTextFilterEnabled(true);
+		mListView.setOnItemClickListener(this);
+		mSearchView.setOnQueryTextListener(this);
+		mSearchView.setSubmitButtonEnabled(false);
+		startLoading();
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		restartLoading();
 	}
 
 	private void startLoading() {
 		adapter.notifyDataSetChanged();
 		getListView().invalidateViews();
-		getLoaderManager().initLoader(PACKAGE_LIST_LOADER, null, this);
+		mLoaderManager.initLoader(PACKAGE_LIST_LOADER, null, this);
 	}
 
 	private void restartLoading() {
-		getLoaderManager().restartLoader(PACKAGE_LIST_LOADER, null, this);
+		mLoaderManager.restartLoader(PACKAGE_LIST_LOADER, null, this);
 	}
 
 	@Override
 	public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-		CursorLoader cursorLoader = new CursorLoader(getActivity(),
-				PackageListProvider.CONTENT_URI, null,
-				PackageListProvider.APPLICATION_LABEL + " LIKE '%" + query
-						+ "%'", null, PackageListProvider.APPLICATION_LABEL);
+		CursorLoader cursorLoader = new CursorLoader(
+				mContext,
+				PackageListProvider.CONTENT_URI,
+				null,
+				(!TextUtils.isEmpty(query) ? PackageListProvider.APPLICATION_LABEL
+						+ " LIKE '%" + query + "%'"
+						: null), null, PackageListProvider.APPLICATION_LABEL);
 		return cursorLoader;
 	}
 
 	@Override
 	public void onLoadFinished(Loader<Cursor> cursorLoader, Cursor cursor) {
 		adapter.swapCursor(cursor);
-		setListShown(true);
-		mSearchView.setVisibility(View.VISIBLE);
 	}
 
 	@Override
@@ -105,7 +109,14 @@ public class PackageListFragment extends ListFragment implements
 
 	@Override
 	public boolean onQueryTextChange(String newText) {
-		query = newText;
+		String newFilter = !TextUtils.isEmpty(newText) ? newText : null;
+		if (query == null && newFilter == null) {
+			return true;
+		}
+		if (query != null && query.equals(newFilter)) {
+			return true;
+		}
+		query = newFilter;
 		if (newText.length() > 0)
 			mListView.setFilterText(newText);
 		else
@@ -116,35 +127,18 @@ public class PackageListFragment extends ListFragment implements
 
 	@Override
 	public boolean onQueryTextSubmit(String query) {
-		return true;
-	}
-
-	private class ScanForPackages extends AsyncTask<Void, Void, Void> {
-
-		@Override
-		protected Void doInBackground(Void... params) {
-			mContentResolver.insert(
-					Uri.parse("content://" + PackageListProvider.AUTHORITY
-							+ "/" + PackageListProvider.BASE_PATH + "/scan"),
-					null);
-			return null;
-		}
-
-		@Override
-		protected void onPostExecute(Void result) {
-			startLoading();
-		}
+		return false;
 	}
 
 	@Override
 	public void onItemClick(AdapterView<?> parent, View view, int position,
 			long id) {
-		CheckBox cb = (CheckBox) view.findViewById(R.id.hwa_settings_blocked);
+		checkBox = (CheckBox) view.findViewById(R.id.hwa_settings_blocked);
 		TextView tv = (TextView) view
 				.findViewById(R.id.hwa_settings_packagename);
 		String packageName = (String) tv.getText();
-		if (cb.isChecked()) {
-			cb.setChecked(false);
+		if (checkBox.isChecked()) {
+			checkBox.setChecked(false);
 			boolean disabled = disableHwa(packageName);
 			if (disabled)
 				Toast.makeText(
@@ -158,10 +152,10 @@ public class PackageListFragment extends ListFragment implements
 						mContext.getString(
 								R.string.hwa_settings_hwa_disable_failed_toast,
 								packageName), Toast.LENGTH_SHORT).show();
-				cb.setChecked(true);
+				checkBox.setChecked(true);
 			}
 		} else {
-			cb.setChecked(true);
+			checkBox.setChecked(true);
 			boolean enabled = enableHwa(packageName);
 			if (enabled)
 				Toast.makeText(
@@ -176,11 +170,10 @@ public class PackageListFragment extends ListFragment implements
 						mContext.getString(
 								R.string.hwa_settings_hwa_enable_failed_toast,
 								packageName), Toast.LENGTH_SHORT).show();
-				cb.setChecked(false);
+				checkBox.setChecked(false);
 			}
 		}
-		restartLoading();
-		mActivityManager.restartPackage(packageName);
+		mActivityManager.killBackgroundProcesses(packageName);
 	}
 
 	private boolean enableHwa(String packageName) {
@@ -197,6 +190,8 @@ public class PackageListFragment extends ListFragment implements
 					Uri.parse("content://" + PackageListProvider.AUTHORITY
 							+ "/" + PackageListProvider.BASE_PATH + "/package/"
 							+ packageName), values, null, null);
+			mContentResolver
+					.notifyChange(PackageListProvider.CONTENT_URI, null);
 		}
 		return enabled;
 	}
@@ -220,6 +215,8 @@ public class PackageListFragment extends ListFragment implements
 					Uri.parse("content://" + PackageListProvider.AUTHORITY
 							+ "/" + PackageListProvider.BASE_PATH + "/package/"
 							+ packageName), values, null, null);
+			mContentResolver
+					.notifyChange(PackageListProvider.CONTENT_URI, null);
 		}
 		return disabled;
 	}
