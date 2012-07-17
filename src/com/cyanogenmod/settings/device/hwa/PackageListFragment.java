@@ -13,18 +13,20 @@ import android.content.CursorLoader;
 import android.content.Loader;
 import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.database.ContentObserver;
 import android.database.Cursor;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.AbsListView;
-import android.widget.AdapterView;
 import android.widget.AbsListView.OnScrollListener;
+import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.CheckBox;
 import android.widget.ImageView;
@@ -43,7 +45,7 @@ public class PackageListFragment extends ListFragment implements
 	private PackageListAdapater adapter;
 	private SearchView mSearchView;
 	protected Context mContext;
-	private String query = "";
+	private String mCurFilter = "";
 	private ListView mListView;
 	private ActivityManager mActivityManager;
 	private ContentResolver mContentResolver;
@@ -54,6 +56,7 @@ public class PackageListFragment extends ListFragment implements
 	private LayoutInflater mInflater;
 	private Cursor mCursor;
 	private PackageManager mPackageManager;
+	public static PackageObserver mPackageObserver;
 
 	@Override
 	public void onActivityCreated(Bundle savedInstanceState) {
@@ -63,6 +66,9 @@ public class PackageListFragment extends ListFragment implements
 		mActivityManager = (ActivityManager) mContext
 				.getSystemService(Context.ACTIVITY_SERVICE);
 		mContentResolver = mContext.getContentResolver();
+		mPackageObserver = new PackageObserver(new Handler());
+		mContentResolver.registerContentObserver(
+				PackageListProvider.CONTENT_URI, true, mPackageObserver);
 		mLoaderManager = getLoaderManager();
 		mSearchView = (SearchView) getActivity().findViewById(
 				R.id.hwa_package_list_search_view);
@@ -83,14 +89,7 @@ public class PackageListFragment extends ListFragment implements
 		startLoading();
 	}
 
-	@Override
-	public void onResume() {
-		super.onResume();
-		restartLoading();
-	}
-
 	private void startLoading() {
-		adapter.notifyDataSetChanged();
 		getListView().invalidateViews();
 		mLoaderManager.initLoader(PACKAGE_LIST_LOADER, null, this);
 	}
@@ -101,13 +100,16 @@ public class PackageListFragment extends ListFragment implements
 
 	@Override
 	public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-		CursorLoader cursorLoader = new CursorLoader(
-				mContext,
-				PackageListProvider.CONTENT_URI,
-				null,
-				(!TextUtils.isEmpty(query) ? PackageListProvider.APPLICATION_LABEL
-						+ " LIKE '" + query + "%'"
-						: null), null, PackageListProvider.HWA_ENABLED + ", "
+		Uri baseUri;
+		if (mCurFilter != null) {
+			baseUri = Uri.withAppendedPath(
+					PackageListProvider.CONTENT_FILTER_URI,
+					Uri.encode(mCurFilter));
+		} else {
+			baseUri = PackageListProvider.CONTENT_URI;
+		}
+		CursorLoader cursorLoader = new CursorLoader(mContext, baseUri, null,
+				null, null, PackageListProvider.HWA_ENABLED + ", "
 						+ PackageListProvider.APPLICATION_LABEL);
 		return cursorLoader;
 	}
@@ -126,13 +128,13 @@ public class PackageListFragment extends ListFragment implements
 	@Override
 	public boolean onQueryTextChange(String newText) {
 		String newFilter = !TextUtils.isEmpty(newText) ? newText : null;
-		if (query == null && newFilter == null) {
+		if (mCurFilter == null && newFilter == null) {
 			return true;
 		}
-		if (query != null && query.equals(newFilter)) {
+		if (mCurFilter != null && mCurFilter.equals(newFilter)) {
 			return true;
 		}
-		query = newFilter;
+		mCurFilter = newFilter;
 		if (newText.length() > 0)
 			mListView.setFilterText(newText);
 		else
@@ -343,5 +345,24 @@ public class PackageListFragment extends ListFragment implements
 		TextView label;
 		TextView packageName;
 		CheckBox enabled;
+	}
+
+	public class PackageObserver extends ContentObserver {
+
+		public PackageObserver(Handler handler) {
+			super(handler);
+		}
+
+		@Override
+		public boolean deliverSelfNotifications() {
+			return true;
+		}
+
+		@Override
+		public void onChange(boolean selfChange) {
+			super.onChange(selfChange);
+			Log.d(TAG, "database changed");
+			restartLoading();
+		}
 	}
 }
