@@ -72,8 +72,7 @@ public class PackageListFragment extends ListFragment implements
 		int[] to = new int[] { R.id.hwa_settings_name,
 				R.id.hwa_settings_packagename, R.id.hwa_settings_enabled };
 		adapter = new PackageListAdapater(getActivity(),
-				R.layout.hwa_settings_row, null, from, to,
-				SimpleCursorAdapter.FLAG_REGISTER_CONTENT_OBSERVER);
+				R.layout.hwa_settings_row, null, from, to, 0);
 		setListAdapter(adapter);
 		setListShown(false);
 		mListView.setTextFilterEnabled(true);
@@ -107,7 +106,7 @@ public class PackageListFragment extends ListFragment implements
 				PackageListProvider.CONTENT_URI,
 				null,
 				(!TextUtils.isEmpty(query) ? PackageListProvider.APPLICATION_LABEL
-						+ " LIKE '%" + query + "%'"
+						+ " LIKE '" + query + "%'"
 						: null), null, PackageListProvider.HWA_ENABLED + ", "
 						+ PackageListProvider.APPLICATION_LABEL);
 		return cursorLoader;
@@ -295,9 +294,7 @@ public class PackageListFragment extends ListFragment implements
 		}
 
 		public View getView(int position, View convertView, ViewGroup parent) {
-			if (mCursor == null) {
-				mCursor = getCursor();
-			}
+			mCursor = getCursor();
 			ViewHolder holder;
 			mCursor.moveToPosition(position);
 			if (convertView == null) {
