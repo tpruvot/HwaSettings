@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Setari HWA</string>
+    <string name="app_name">Setari Hwa</string>
     <string name="hwa_settings_image_content" >Imagine</string>
     <string name="hwa_settings_hwa_disabled_toast">HWA dezactivat pentru %1$s.</string>
     <string name="hwa_settings_hwa_disable_failed_toast">Dezactivare HWA pentru %1$s esuata!!</string>
