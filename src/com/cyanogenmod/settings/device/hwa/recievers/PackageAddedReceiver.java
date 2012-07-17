@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.util.Log;
 
 import com.cyanogenmod.settings.device.hwa.PackageListProvider;
 
@@ -32,6 +33,7 @@ public class PackageAddedReceiver extends BroadcastReceiver {
 	}
 
 	private class AddPackage extends AsyncTask<Void, Void, Void> {
+
 		@Override
 		protected Void doInBackground(Void... params) {
 			ContentValues values = new ContentValues();
@@ -52,20 +54,17 @@ public class PackageAddedReceiver extends BroadcastReceiver {
 				info = mPackageManager.getApplicationInfo(mPackageName,
 						PackageManager.GET_META_DATA);
 			} catch (NameNotFoundException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				Log.w(TAG, "Package " + mPackageName + " not found!!");
 				return null;
 			}
 			values.put(PackageListProvider.APPLICATION_LABEL,
 					(String) mPackageManager.getApplicationLabel(info));
 			values.put(PackageListProvider.PACKAGE_NAME, mPackageName);
-			values.put(PackageListProvider.HWA_DISABLED,
+			values.put(PackageListProvider.HWA_ENABLED,
 					String.valueOf(hwaIsDiabled));
 			mContentResolver.insert(Uri.withAppendedPath(
-					PackageListProvider.PACKAGE_URI, mPackageName),
-					values);
+					PackageListProvider.PACKAGE_URI, mPackageName), values);
 			return null;
 		}
 	}
-
 }
